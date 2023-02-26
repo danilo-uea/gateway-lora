@@ -32,6 +32,21 @@
  * - O codigo deve ser adaptado para sua necessidade, ou simplesmente utilizado como base para suas implementacoes.
  * */
 
+// Estrutura que vai receber os dados do transmissor via LoRa
+typedef struct
+{
+  int contador;
+  int hora;
+  int minuto;
+  int segundo;
+  int dia;
+  int mes;
+  int ano;
+  float f_latitude;
+  float f_longitude;
+  float temperatura;
+  float umidade;
+} TDadosLora ;
 
 //screen -d -m -S shared e screen -x
 #define LAST_UPDATE "20.01.2020 15:16"
@@ -50,15 +65,8 @@
 #define UNIX_EPOCH 1
 #define HUMAN_TIME 2
 
-
-//exemplo de mensagem, comećando em $ e terminando com \n. Os Bytes internos representam a mensagem
-//!Primeiro byte do buffer
-#define BUF_START 0
-//Ultimo byte do buffer
-#define BUF_END   5
-
 /***********************************************/
-#define MESSAGE_LENGTH		6				//6 Bytes used in the message ((0)$ (1)sensorA (2)sensorB (3)sensorC (4)sensorD (5)\n)
+#define MESSAGE_LENGTH		44				//6 Bytes used in the message ((0)$ (1)sensorA (2)sensorB (3)sensorC (4)sensorD (5)\n)
 #define TIME_TO_UPDATE		1000			//Time before entering to update mode.
 /***********************************************/
 /*! Habilita (1) ou desabilita (2) o debug. Pode ser ativado por linha de comando com
@@ -376,7 +384,7 @@ void sig_handler(int sig)
 
 /*! Funcao principal. Todo o programa e executado dentro dessa funcao. A primeira tarefa e validar o usuário; se
 nao for root, sai imediatamente. Executar como root e mandatorio devido a acessos privilegiados do BCM.*/
-int main (int argc, char *argv[] ){
+int main (int argc, char *argv[] ){    
     isAlreadyRunning();
 
     //Informacoes sobre a tabela da base de exemplo ficticia
@@ -583,84 +591,36 @@ int main (int argc, char *argv[] ){
 
     //SE PRECISAR FAZER DEBUG APENAS NO PRIMEIRO RADIO,
     //BASTA COMENTAR O OPERADOR TERNARIO NO FINAL DO LOOP
+    
+    TDadosLora dados_lora;
+    char * ptInformaraoRecebida = NULL;
+    
     while (!force_exit) {
-
         if (rf95[radioNumber].available()) {
           // Should be a message for us now
           uint8_t buf[MESSAGE_LENGTH];
           uint8_t len   = sizeof(buf);
 
           _lastMessageMillis = getMillis();
-
-          uint8_t from  = rf95[radioNumber].headerFrom();
-          //uint8_t to    = rf95[radioNumber].headerTo();
-          //uint8_t id    = rf95[radioNumber].headerId();
-          //uint8_t flags = rf95[radioNumber].headerFlags();
-          //int8_t rssi   = rf95[radioNumber].lastRssi();
-
-          string head = "\033[1;7;95m";
-          string foot = "\033[0m";
+          ptInformaraoRecebida = (char *)&dados_lora;
           
           if (rf95[radioNumber].recv(buf, &len)) {
-              if (buf[BUF_START] == '$' && buf[BUF_END] == '\n'){
-                  head = " ";
-                  foot = " ";
-
-                  debug(head);
-                  debug("Chegou mensagem (radio ");
-                  debug(to_string(radioNumber));
-                  debug("): ");
-
-                  debug("addr: ");
-                  debug(to_string(from) + " ");
-                  debug("buffer: ");
-                  //comeca no 0 e termina no <6 (BUF_END = 5): (0) $ (1) counter (2) counter (3) bat (4) violation (5) \n)
-                  for (int i=BUF_START;i<MESSAGE_LENGTH;i++){
-                      debug( to_string(buf[i]) + " ");
-                  }
-
-                  int addr            = from;
-                  int consumption     = buf[1] << 8|(buf[2]);
-                  int bat             = buf[3];
-                  int violation       = buf[4];
-                  string dt           = dateTimeToStr(UNIX_EPOCH);
-                  
-                  //Para converter para datetime: select datetime(dt,'unixepoch','localtime') from clients where address=>endereco>;
-
-                  string query_insert = "insert into clients(address,consumption,battery,violation,dt) values (" + to_string(addr);
-                  query_insert        = query_insert + "," + to_string(consumption) + "," + to_string(bat) + ",";
-                  query_insert        = query_insert + to_string(violation) + "," + dt + ")";
-
-                  db_query(query_insert.c_str(),dbConf.db); //O retorno esta na estrutura dbConf.results e dbConf.query_status
-
-
-                  if (dbConf.query_status != 0){
-                      string query_update = "update clients set consumption=" + to_string(consumption);
-                      query_update        = query_update + ",battery=" + to_string(bat);
-                      query_update        = query_update + ",violation=" + to_string(violation) + ",dt=" + dt + " where address=" + to_string(addr);
-                      dbConf.query_status = 0;
-
-                      db_query(query_update.c_str(),dbConf.db);
-                  }
-                  debug("\n");
-                  debug(foot);
-
+              for (int i=0;i<MESSAGE_LENGTH;i++){
+                  *ptInformaraoRecebida = buf[i];
+                  ptInformaraoRecebida++;
               }
-              else{
-                debug(head);
-                debug(" ::: IGNORANDO MENSAGEM A SEGUIR ::: \n");
-                debug("Mensagem invalida - rádio ");
-                debug(to_string(radioNumber));
-                debug(" Addr: ");
-                debug(to_string(from));
-                debug(" Buffer: ");
-                for (int i=BUF_START;i<MESSAGE_LENGTH;i++){
-                      debug( to_string(buf[i]) + " ");
-                  }
-                  debug("\n");
-                  debug(foot);
-              }
-
+              debug("Tamanho: " + to_string(sizeof(dados_lora)) + "\n");
+              debug("Contador: " + to_string(dados_lora.contador) + "\n");
+              debug("Hora: " + to_string(dados_lora.hora) + "\n");
+              debug("Minuto: " + to_string(dados_lora.minuto) + "\n");
+              debug("Segundo: " + to_string(dados_lora.segundo) + "\n");
+              debug("Dia: " + to_string(dados_lora.dia) + "\n");
+              debug("Mes: " + to_string(dados_lora.mes) + "\n");
+              debug("Ano: " + to_string(dados_lora.ano) + "\n");
+              debug("Latitude: " + to_string(dados_lora.f_latitude) + "\n");
+              debug("Longitude: " + to_string(dados_lora.f_longitude) + "\n");
+              debug("Temperatura: " + to_string(dados_lora.temperatura) + "\n");
+              debug("Umidade: " + to_string(dados_lora.umidade) + "\n\n");
           }
           else {
               debug("Erro ao receber mensagem :(\n");
@@ -687,7 +647,7 @@ int main (int argc, char *argv[] ){
         bcm2835_delay(5);
 
         //COMENTE ESSA LINHA PARA USAR APENAS O RADIO 0
-        radioNumber = radioNumber > number_of_radios_to_initialize-2 ? 0 : radioNumber+1;
+        //radioNumber = radioNumber > number_of_radios_to_initialize-2 ? 0 : radioNumber+1;
 
     }//while (!force_exit)
 
